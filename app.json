@@ -1,0 +1,35 @@
+{
+  "expo": {
+    "name": "WhatToEat",
+    "slug": "whattoeat",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "We need your location to provide relevant local food recommendations.",
+        "NSMotionUsageDescription": "We need access to your motion data to use step count for personalized recommendations."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#ffffff"
+      },
+      "permissions": [
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACTIVITY_RECOGNITION"
+      ]
+    },
+    "plugins": [
+      "expo-camera",
+      "expo-image-picker",
+      "expo-media-library",
+      "expo-location",
+      "expo-sensors"
+    ]
+  }
+}
