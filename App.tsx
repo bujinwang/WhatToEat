@@ -3,19 +3,11 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Feather } from '@expo/vector-icons';
 import HomeScreen from './src/screens/HomeScreen';
-import { View, Text } from 'react-native';
+import HistoryScreen from './src/screens/HistoryScreen';
+import StatsScreen from './src/screens/StatsScreen';
+import SettingsScreen from './src/screens/SettingsScreen';
 
 const Tab = createBottomTabNavigator();
-
-function HistoryScreen() {
-  return <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}><Text>历史记录</Text></View>;
-}
-function StatsScreen() {
-  return <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}><Text>统计分析</Text></View>;
-}
-function SettingsScreen() {
-  return <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}><Text>设置</Text></View>;
-}
 
 export default function App() {
   return (

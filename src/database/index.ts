@@ -169,5 +169,159 @@ export const getDetectedFoodItems = (photoId: number): Promise<DetectedFoodItem[
   });
 };
 
+// Get all photo analyses (for history screen)
+export const getAllPhotoAnalyses = (): Promise<PhotoAnalysis[]> => {
+  return new Promise((resolve, reject) => {
+    db.transaction(tx => {
+      tx.executeSql(
+        'SELECT * FROM PhotoAnalysis ORDER BY analysisTimestamp DESC',
+        [],
+        (_, { rows }) => {
+          const analyses: PhotoAnalysis[] = [];
+          for (let i = 0; i < rows.length; i++) {
+            const row = rows.item(i);
+            analyses.push({
+              ...row,
+              isConfirmed: Boolean(row.isConfirmed)
+            });
+          }
+          resolve(analyses);
+        },
+        (_, error) => {
+          reject(error);
+          return false;
+        }
+      );
+    });
+  });
+};
+
+// Get photo analyses with pagination
+export const getPhotoAnalysesPaginated = (limit: number, offset: number): Promise<PhotoAnalysis[]> => {
+  return new Promise((resolve, reject) => {
+    db.transaction(tx => {
+      tx.executeSql(
+        'SELECT * FROM PhotoAnalysis ORDER BY analysisTimestamp DESC LIMIT ? OFFSET ?',
+        [limit, offset],
+        (_, { rows }) => {
+          const analyses: PhotoAnalysis[] = [];
+          for (let i = 0; i < rows.length; i++) {
+            const row = rows.item(i);
+            analyses.push({
+              ...row,
+              isConfirmed: Boolean(row.isConfirmed)
+            });
+          }
+          resolve(analyses);
+        },
+        (_, error) => {
+          reject(error);
+          return false;
+        }
+      );
+    });
+  });
+};
+
+// Get recent analyses (for stats)
+export const getRecentAnalyses = (days: number): Promise<PhotoAnalysis[]> => {
+  return new Promise((resolve, reject) => {
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - days);
+
+    db.transaction(tx => {
+      tx.executeSql(
+        'SELECT * FROM PhotoAnalysis WHERE analysisTimestamp >= ? ORDER BY analysisTimestamp DESC',
+        [startDate.toISOString()],
+        (_, { rows }) => {
+          const analyses: PhotoAnalysis[] = [];
+          for (let i = 0; i < rows.length; i++) {
+            const row = rows.item(i);
+            analyses.push({
+              ...row,
+              isConfirmed: Boolean(row.isConfirmed)
+            });
+          }
+          resolve(analyses);
+        },
+        (_, error) => {
+          reject(error);
+          return false;
+        }
+      );
+    });
+  });
+};
+
+// Get analysis count by meal time
+export const getAnalysisCountByMealTime = (): Promise<{ [key: string]: number }> => {
+  return new Promise((resolve, reject) => {
+    db.transaction(tx => {
+      tx.executeSql(
+        'SELECT mealTimeEstimate, COUNT(*) as count FROM PhotoAnalysis GROUP BY mealTimeEstimate',
+        [],
+        (_, { rows }) => {
+          const counts: { [key: string]: number } = {};
+          for (let i = 0; i < rows.length; i++) {
+            const row = rows.item(i);
+            counts[row.mealTimeEstimate] = row.count;
+          }
+          resolve(counts);
+        },
+        (_, error) => {
+          reject(error);
+          return false;
+        }
+      );
+    });
+  });
+};
+
+// Delete a photo analysis
+export const deletePhotoAnalysis = (id: number): Promise<void> => {
+  return new Promise((resolve, reject) => {
+    db.transaction(tx => {
+      // First delete related detected items
+      tx.executeSql(
+        'DELETE FROM DetectedFoodItems WHERE photoId = ?',
+        [id],
+        () => {
+          // Then delete the analysis
+          tx.executeSql(
+            'DELETE FROM PhotoAnalysis WHERE id = ?',
+            [id],
+            () => resolve(),
+            (_, error) => {
+              reject(error);
+              return false;
+            }
+          );
+        },
+        (_, error) => {
+          reject(error);
+          return false;
+        }
+      );
+    });
+  });
+};
+
+// Update confirmation status
+export const updatePhotoAnalysisConfirmation = (id: number, isConfirmed: boolean): Promise<void> => {
+  return new Promise((resolve, reject) => {
+    db.transaction(tx => {
+      tx.executeSql(
+        'UPDATE PhotoAnalysis SET isConfirmed = ? WHERE id = ?',
+        [isConfirmed ? 1 : 0, id],
+        () => resolve(),
+        (_, error) => {
+          reject(error);
+          return false;
+        }
+      );
+    });
+  });
+};
+
 // Initialize the database when the module is imported
 initDatabase(); 

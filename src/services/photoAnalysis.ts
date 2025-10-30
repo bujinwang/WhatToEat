@@ -56,36 +56,54 @@ export const analyzePhoto = async (photoUri: string): Promise<{
   detectedItems: DetectedFoodItem[];
 } | null> => {
   try {
-    // TODO: Implement actual food recognition using TensorFlow.js
-    // For now, we'll create mock data
-    const mockAnalysis: Omit<PhotoAnalysis, 'id'> = {
+    // Use TensorFlow.js for actual food recognition
+    const { classifyImage, estimateMealTime, mapPredictionsToFoodItems } = await import('./foodRecognition');
+
+    console.log('Analyzing photo with TensorFlow.js...');
+    const { predictions, isFoodDetected, confidenceScore } = await classifyImage(photoUri);
+
+    if (!isFoodDetected) {
+      console.warn('No food detected in the image');
+      // Still save the analysis, but with low confidence
+    }
+
+    const mealTime = estimateMealTime();
+    const foodItems = mapPredictionsToFoodItems(predictions);
+
+    const analysis: Omit<PhotoAnalysis, 'id'> = {
       photoPath: photoUri,
       analysisTimestamp: new Date().toISOString(),
-      confidenceScore: 0.85,
-      mealTimeEstimate: 'lunch',
+      confidenceScore: confidenceScore,
+      mealTimeEstimate: mealTime,
       isConfirmed: false
     };
 
-    const analysisId = await addPhotoAnalysis(mockAnalysis);
+    const analysisId = await addPhotoAnalysis(analysis);
 
-    const mockDetectedItems: Omit<DetectedFoodItem, 'id'>[] = [
-      {
-        photoId: analysisId,
-        foodId: 1, // Assuming food ID 1 exists in the database
-        confidenceScore: 0.9,
-        estimatedAmount: 200,
-        userCorrectedAmount: null,
-        positionInPhoto: JSON.stringify({ x: 100, y: 100, width: 200, height: 200 })
-      }
-    ];
+    // Create detected food items from predictions
+    const detectedItems: Omit<DetectedFoodItem, 'id'>[] = foodItems.slice(0, 3).map((item, index) => ({
+      photoId: analysisId,
+      foodId: index + 1, // Temporary ID - in production, map to actual food database
+      confidenceScore: item.confidence,
+      estimatedAmount: 100, // Default serving size in grams
+      userCorrectedAmount: null,
+      positionInPhoto: JSON.stringify({
+        x: 0,
+        y: 0,
+        width: 100,
+        height: 100,
+        name: item.name,
+        category: item.category
+      })
+    }));
 
     const detectedItemIds = await Promise.all(
-      mockDetectedItems.map(item => addDetectedFoodItem(item))
+      detectedItems.map(item => addDetectedFoodItem(item))
     );
 
     return {
-      analysis: { ...mockAnalysis, id: analysisId },
-      detectedItems: mockDetectedItems.map((item, index) => ({
+      analysis: { ...analysis, id: analysisId },
+      detectedItems: detectedItems.map((item, index) => ({
         ...item,
         id: detectedItemIds[index]
       }))
