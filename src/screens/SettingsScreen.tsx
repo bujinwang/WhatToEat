@@ -22,8 +22,10 @@ import {
   exportSettings,
 } from '../services/settingsService';
 import { deletePhotoAnalysis, getAllPhotoAnalyses } from '../database';
+import { useTheme } from '../contexts/ThemeContext';
 
 export default function SettingsScreen() {
+  const { themeMode, setThemeMode } = useTheme();
   const [settings, setSettings] = useState<UserSettings | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
@@ -367,6 +369,20 @@ export default function SettingsScreen() {
             <Text style={styles.sectionTitle}>应用设置</Text>
 
             <View style={styles.card}>
+              <SettingItem
+                label="主题"
+                value={themeMode === 'light' ? '浅色' : themeMode === 'dark' ? '深色' : '跟随系统'}
+                onPress={() => {
+                  const themeOptions = [
+                    { label: '浅色', value: 'light' as const },
+                    { label: '深色', value: 'dark' as const },
+                    { label: '跟随系统', value: 'auto' as const },
+                  ];
+                  const currentIndex = themeOptions.findIndex(opt => opt.value === themeMode);
+                  const nextIndex = (currentIndex + 1) % themeOptions.length;
+                  setThemeMode(themeOptions[nextIndex].value);
+                }}
+              />
               <SettingSwitch
                 label="通知提醒"
                 value={settings.app.notifications}

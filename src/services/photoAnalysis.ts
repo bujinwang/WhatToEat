@@ -58,6 +58,7 @@ export const analyzePhoto = async (photoUri: string): Promise<{
   try {
     // Use TensorFlow.js for actual food recognition
     const { classifyImage, estimateMealTime, mapPredictionsToFoodItems } = await import('./foodRecognition');
+    const { searchFoodItems, getFoodItemByName } = await import('./foodDatabaseService');
 
     console.log('Analyzing photo with TensorFlow.js...');
     const { predictions, isFoodDetected, confidenceScore } = await classifyImage(photoUri);
@@ -80,22 +81,42 @@ export const analyzePhoto = async (photoUri: string): Promise<{
 
     const analysisId = await addPhotoAnalysis(analysis);
 
-    // Create detected food items from predictions
-    const detectedItems: Omit<DetectedFoodItem, 'id'>[] = foodItems.slice(0, 3).map((item, index) => ({
-      photoId: analysisId,
-      foodId: index + 1, // Temporary ID - in production, map to actual food database
-      confidenceScore: item.confidence,
-      estimatedAmount: 100, // Default serving size in grams
-      userCorrectedAmount: null,
-      positionInPhoto: JSON.stringify({
-        x: 0,
-        y: 0,
-        width: 100,
-        height: 100,
-        name: item.name,
-        category: item.category
-      })
-    }));
+    // Create detected food items from predictions and map to actual food database
+    const detectedItems: Omit<DetectedFoodItem, 'id'>[] = [];
+
+    for (const item of foodItems.slice(0, 3)) {
+      // Try to find exact match first
+      let foodItem = await getFoodItemByName(item.name);
+
+      // If no exact match, try searching for similar items
+      if (!foodItem) {
+        const searchResults = await searchFoodItems(item.name);
+        if (searchResults.length > 0) {
+          foodItem = searchResults[0]; // Use the first match
+        }
+      }
+
+      // Only add if we found a matching food item in the database
+      if (foodItem) {
+        detectedItems.push({
+          photoId: analysisId,
+          foodId: foodItem.id,
+          confidenceScore: item.confidence,
+          estimatedAmount: foodItem.servingSize, // Use the standard serving size
+          userCorrectedAmount: null,
+          positionInPhoto: JSON.stringify({
+            x: 0,
+            y: 0,
+            width: 100,
+            height: 100,
+            name: foodItem.name,
+            category: foodItem.category
+          })
+        });
+      } else {
+        console.warn(`Food item not found in database: ${item.name}`);
+      }
+    }
 
     const detectedItemIds = await Promise.all(
       detectedItems.map(item => addDetectedFoodItem(item))

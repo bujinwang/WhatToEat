@@ -11,10 +11,14 @@ import {
   ActivityIndicator, // Import ActivityIndicator for loading state
   Linking,
   Platform,
+  Alert,
+  Modal,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons'; // Use Feather icons like in App.tsx
 import { getFoodRecommendation } from '../services/recommendationService'; // Import the service
 import * as Location from 'expo-location';
+import { requestPermissions, takePhoto, pickFromGallery, analyzePhoto } from '../services/photoAnalysis';
+import { getFoodItemById } from '../services/foodDatabaseService';
 
 // Placeholder data - adjust image URLs for React Native
 const foodRecommendations = [
@@ -97,6 +101,12 @@ export default function HomeScreen({ navigation }) {
   const [isLoadingRecommendation, setIsLoadingRecommendation] = useState(false);
   const [userLocation, setUserLocation] = useState<{lat: number, lng: number} | null>(null);
 
+  // Photo analysis states
+  const [showPhotoModal, setShowPhotoModal] = useState(false);
+  const [analyzingPhoto, setAnalyzingPhoto] = useState(false);
+  const [photoAnalysisResult, setPhotoAnalysisResult] = useState<any | null>(null);
+  const [capturedPhotoUri, setCapturedPhotoUri] = useState<string | null>(null);
+
   const handleGetRecommendation = async () => {
     setActiveTab('eat');
     setIsLoadingRecommendation(true);
@@ -123,6 +133,76 @@ export default function HomeScreen({ navigation }) {
 
   const getRecommendations = () => {
     return activeTab === 'eat' ? foodRecommendations : drinkRecommendations;
+  };
+
+  // Camera button handler
+  const handleCameraPress = async () => {
+    const permissions = await requestPermissions();
+    if (!permissions.camera) {
+      Alert.alert('权限不足', '需要相机权限才能拍照');
+      return;
+    }
+    setShowPhotoModal(true);
+  };
+
+  // Take photo handler
+  const handleTakePhoto = async () => {
+    setShowPhotoModal(false);
+    const photoUri = await takePhoto();
+    if (photoUri) {
+      setCapturedPhotoUri(photoUri);
+      await handleAnalyzePhoto(photoUri);
+    }
+  };
+
+  // Pick from gallery handler
+  const handlePickFromGallery = async () => {
+    setShowPhotoModal(false);
+    const photoUri = await pickFromGallery();
+    if (photoUri) {
+      setCapturedPhotoUri(photoUri);
+      await handleAnalyzePhoto(photoUri);
+    }
+  };
+
+  // Analyze photo
+  const handleAnalyzePhoto = async (photoUri: string) => {
+    setAnalyzingPhoto(true);
+    try {
+      const result = await analyzePhoto(photoUri);
+      if (result && result.detectedItems.length > 0) {
+        // Fetch food details for each detected item
+        const foodDetails = await Promise.all(
+          result.detectedItems.map(async (item: any) => {
+            const foodItem = await getFoodItemById(item.foodId);
+            return {
+              ...item,
+              foodDetails: foodItem,
+            };
+          })
+        );
+        setPhotoAnalysisResult({
+          ...result,
+          detectedItems: foodDetails,
+        });
+        Alert.alert(
+          '分析完成',
+          `识别到 ${result.detectedItems.length} 种食物`,
+          [
+            { text: '查看详情', onPress: () => navigation.navigate('历史') },
+            { text: '确定' },
+          ]
+        );
+      } else {
+        Alert.alert('未识别到食物', '请尝试拍摄更清晰的食物照片');
+      }
+    } catch (error) {
+      console.error('Photo analysis error:', error);
+      Alert.alert('分析失败', '请稍后重试');
+    } finally {
+      setAnalyzingPhoto(false);
+      setCapturedPhotoUri(null);
+    }
   };
 
   // Define styles using StyleSheet.create
@@ -458,6 +538,83 @@ export default function HomeScreen({ navigation }) {
       fontSize: 16,
       fontWeight: 'bold',
     },
+    // Floating Action Button (FAB) styles
+    fab: {
+      position: 'absolute',
+      right: 20,
+      bottom: 20,
+      width: 60,
+      height: 60,
+      borderRadius: 30,
+      backgroundColor: '#ef4444',
+      justifyContent: 'center',
+      alignItems: 'center',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.3,
+      shadowRadius: 5,
+      elevation: 8,
+    },
+    // Modal styles
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0, 0, 0, 0.5)',
+      justifyContent: 'flex-end',
+    },
+    modalContent: {
+      backgroundColor: 'white',
+      borderTopLeftRadius: 20,
+      borderTopRightRadius: 20,
+      padding: 20,
+      paddingBottom: 40,
+    },
+    modalTitle: {
+      fontSize: 20,
+      fontWeight: 'bold',
+      marginBottom: 20,
+      textAlign: 'center',
+    },
+    modalButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      padding: 16,
+      borderRadius: 12,
+      backgroundColor: '#f3f4f6',
+      marginBottom: 12,
+    },
+    modalButtonText: {
+      fontSize: 18,
+      fontWeight: '500',
+      marginLeft: 12,
+      color: '#1f2937',
+    },
+    modalCancelButton: {
+      padding: 16,
+      borderRadius: 12,
+      backgroundColor: '#fee2e2',
+      alignItems: 'center',
+    },
+    modalCancelButtonText: {
+      fontSize: 18,
+      fontWeight: '500',
+      color: '#ef4444',
+    },
+    analyzingOverlay: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      backgroundColor: 'rgba(0, 0, 0, 0.7)',
+      justifyContent: 'center',
+      alignItems: 'center',
+      zIndex: 9999,
+    },
+    analyzingText: {
+      color: 'white',
+      fontSize: 18,
+      marginTop: 12,
+    },
     // Footer styles are handled by Tab.Navigator in App.tsx
   });
 
@@ -653,6 +810,70 @@ export default function HomeScreen({ navigation }) {
             </View>
           </View>
         </ScrollView>
+
+        {/* Floating Action Button for Camera */}
+        <TouchableOpacity
+          style={styles.fab}
+          onPress={handleCameraPress}
+          accessibilityLabel="拍照识别食物"
+        >
+          <Feather name="camera" size={28} color="white" />
+        </TouchableOpacity>
+
+        {/* Photo Options Modal */}
+        <Modal
+          visible={showPhotoModal}
+          transparent={true}
+          animationType="slide"
+          onRequestClose={() => setShowPhotoModal(false)}
+        >
+          <TouchableOpacity
+            style={styles.modalOverlay}
+            activeOpacity={1}
+            onPress={() => setShowPhotoModal(false)}
+          >
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>选择照片来源</Text>
+
+              <TouchableOpacity
+                style={styles.modalButton}
+                onPress={handleTakePhoto}
+              >
+                <Feather name="camera" size={24} color="#1f2937" />
+                <Text style={styles.modalButtonText}>拍照</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.modalButton}
+                onPress={handlePickFromGallery}
+              >
+                <Feather name="image" size={24} color="#1f2937" />
+                <Text style={styles.modalButtonText}>从相册选择</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.modalCancelButton}
+                onPress={() => setShowPhotoModal(false)}
+              >
+                <Text style={styles.modalCancelButtonText}>取消</Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </Modal>
+
+        {/* Analyzing Overlay */}
+        {analyzingPhoto && (
+          <View style={styles.analyzingOverlay}>
+            <ActivityIndicator size="large" color="white" />
+            <Text style={styles.analyzingText}>正在分析照片...</Text>
+            {capturedPhotoUri && (
+              <Image
+                source={{ uri: capturedPhotoUri }}
+                style={{ width: 200, height: 200, marginTop: 20, borderRadius: 12 }}
+              />
+            )}
+          </View>
+        )}
 
         {/* 底部导航栏 - This is handled by App.tsx */}
       </View>
